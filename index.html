@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+nav{
+background:#00897b;
+padding:14px 20px;
+display:flex;
+align-items:center;
+gap:10px
+}
+
+nav h2{color:white;margin-right:20px}
+
+nav button{
+background:transparent;
+color:white;
+border:none;
+padding:6px 14px;
+cursor:pointer
+}
+
+nav button.active{
+background:white;
+color:#00897b
+}
+
+.page{
+display:none;
+max-width:700px;
+margin:30px 0;
+padding:24px;
+box-shadow:0 0 10px #ccc
+}
+
+.page.active{display:block}
+
+h3{margin-bottom:14px}
+
+input,select{
+padding:9px;
+margin:5px 0;
+width:100%
+}
+
+.btn{
+padding:9px 20px;
+margin-top:8px;
+background:#00897b;
+color:white;
+border:none;
+cursor:pointer
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:16px
+}
+
+th{
+background:#00897b;
+color:white;
+padding:8px
+}
+
+td{
+border:1px solid #ccc;
+padding:8px;
+font-size:13px
+}
+
+.del{padding:4px 8px;cursor:pointer}
+
+.msg{font-size:13px;margin-top:8px}
+
+.ok{color:green}
+.err{color:red}
+
+</style>
+</head>
+
+<body>
+
+<nav>
+<h2>🏠 RentEasy</h2>
+<button class="active" onclick="show('browse',this)">Browse</button>
+<button onclick="show('book',this)">Book</button>
+<button onclick="show('maint',this)">Maintenance</button>
+</nav>
+
+
+<div id="browse" class="page active">
+
+<h3>Search Properties</h3>
+
+<input id="searchLoc" placeholder="Search by city">
+
+<select id="searchType">
+<option value="">All Types</option>
+<option>Apartment</option>
+<option>Flat</option>
+<option>Villa</option>
+</select>
+
+<button class="btn" onclick="loadProperties()">Search</button>
+
+<table>
+<thead>
+<tr><th>ID</th><th>Title</th><th>Location</th><th>Type</th><th>Rent/mo</th><th></th></tr>
+</thead>
+<tbody id="propTable"></tbody>
+</table>
+
+</div>
+
+
+<div id="book" class="page">
+
+<h3>Book a Property</h3>
+
+<input id="bookName" placeholder="Your Name">
+<input id="bookPropId" type="number" placeholder="Property ID">
+<label>Start Date</label>
+<input id="bookStart" type="date">
+<label>End Date</label>
+<input id="bookEnd" type="date">
+
+<button class="btn" onclick="bookProperty()">Book Now</button>
+
+<p id="bookMsg" class="msg"></p>
+
+<table>
+<thead>
+<tr><th>ID</th><th>Name</th><th>Prop ID</th><th>From</th><th>To</th><th>Status</th></tr>
+</thead>
+<tbody id="bookTable"></tbody>
+</table>
+
+</div>
+
+
+<div id="maint" class="page">
+
+<h3>Maintenance Request</h3>
+
+<input id="maintName" placeholder="Your Name">
+<input id="maintPropId" type="number" placeholder="Property ID">
+<input id="maintIssue" placeholder="Describe the issue">
+
+<button class="btn" onclick="submitMaint()">Submit</button>
+
+<p id="maintMsg" class="msg"></p>
+
+<table>
+<thead>
+<tr><th>ID</th><th>Name</th><th>Prop ID</th><th>Issue</th><th>Date</th><th>Status</th></tr>
+</thead>
+<tbody id="maintTable"></tbody>
+</table>
+
+</div>
+
+
+<script>
+
+const $=id=>document.getElementById(id)
+
+function msg(el,text,type){
+el.textContent=text
+el.className="msg "+type
+}
+
+function post(url,data){
+return fetch(url,{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(data)
+})
+}
+
+function show(id,btn){
+document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"))
+document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"))
+$(id).classList.add("active")
+btn.classList.add("active")
+}
+
+async function loadProperties(){
+const res=await fetch("/properties?"+new URLSearchParams({
+location:$("searchLoc").value,
+type:$("searchType").value
+}))
+const data=await res.json()
+
+$("propTable").innerHTML=data.map(p=>`
+<tr>
+<td>${p.id}</td>
+<td>${p.title}</td>
+<td>${p.location}</td>
+<td>${p.type}</td>
+<td>₹${p.rent}</td>
+<td><button class="del" onclick="deleteProperty(${p.id})">Delete</button></td>
+</tr>
+`).join("")||`<tr><td colspan="6">No properties found</td></tr>`
+}
+
+async function deleteProperty(id){
+await fetch("/properties/"+id,{method:"DELETE"})
+loadProperties()
+}
+
+async function bookProperty(){
+
+const res=await post("/bookings",{
+name:$("bookName").value,
+propertyId:$("bookPropId").value,
+startDate:$("bookStart").value,
+endDate:$("bookEnd").value
+})
+
+const data=await res.json()
+
+if(!res.ok)
+msg($("bookMsg"),data.error,"err")
+else{
+msg($("bookMsg"),"Booking confirmed!","ok")
+loadBookings()
+}
+}
+
+async function loadBookings(){
+
+const data=await fetch("/bookings").then(r=>r.json())
+
+$("bookTable").innerHTML=data.map(b=>`
+<tr>
+<td>${b.id}</td>
+<td>${b.name}</td>
+<td>${b.propertyId}</td>
+<td>${b.startDate}</td>
+<td>${b.endDate}</td>
+<td>${b.status}</td>
+</tr>
+`).join("")||`<tr><td colspan="6">No bookings yet</td></tr>`
+}
+
+async function submitMaint(){
+
+await post("/maintenance",{
+name:$("maintName").value,
+propertyId:$("maintPropId").value,
+issue:$("maintIssue").value
+})
+
+msg($("maintMsg"),"Request submitted!","ok")
+
+loadMaint()
+}
+
+async function loadMaint(){
+
+const data=await fetch("/maintenance").then(r=>r.json())
+
+$("maintTable").innerHTML=data.map(m=>`
+<tr>
+<td>${m.id}</td>
+<td>${m.name}</td>
+<td>${m.propertyId}</td>
+<td>${m.issue}</td>
+<td>${m.date}</td>
+<td>${m.status}</td>
+</tr>
+`).join("")||`<tr><td colspan="6">No requests yet</td></tr>`
+}
+
+loadProperties()
+loadBookings()
+loadMaint()
+
+</script>
+
+</body>
+</html>
