@@ -204,7 +204,6 @@ export const OwnerDashboard: React.FC = () => {
                   Renter: {agr.renter?.name} | Value: ${agr.totalAmount.toFixed(2)}
                 </p>
               </div>
-
               <div>
                 {agr.status === 'PENDING_ACCEPTANCE' && (
                   <button className="btn btn-success" onClick={() => handleAcceptAgreement(agr.id)}>
