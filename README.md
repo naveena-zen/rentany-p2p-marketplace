@@ -1,10 +1,10 @@
-# RentAny 🛡️ - Peer-to-Peer Rental Marketplace
+# RentAny - Peer-to-Peer Rental Marketplace
 
 **RentAny** is a full-stack, production-grade peer-to-peer rental platform where users can list and rent items across 5 categories (**PROPERTY**, **VEHICLE**, **EQUIPMENT**, **APPAREL**, **SERVICE**), negotiate composable legal contracts, transact via escrow-backed intermediaries, and resolve disputes through structured binding arbitration.
 
 ---
 
-## 🏗️ Architecture Overview & Hard Design Decisions
+## Architecture Overview & Hard Design Decisions
 
 ### 1. Immutable Contract Snapshots (`compiledClauses`)
 - **Problem**: In traditional rental systems, if an owner updates a contract template (e.g., increases late fee rate or changes cancellation window) *after* a renter requests a booking, the active agreement could retroactively mutate or cause legal ambiguity.
