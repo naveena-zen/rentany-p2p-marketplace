@@ -1,0 +1,191 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Category {
+  PROPERTY
+  VEHICLE
+  EQUIPMENT
+  APPAREL
+  SERVICE
+}
+
+enum PricingUnit {
+  HOUR
+  DAY
+  WEEK
+  USE
+}
+
+enum AgreementStatus {
+  DRAFT
+  PENDING_ACCEPTANCE
+  ACTIVE
+  DISPUTED
+  COMPLETED
+  VOIDED
+}
+
+enum EscrowState {
+  UNFUNDED
+  PENDING
+  RELEASED
+  REFUNDED
+  SPLIT
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+}
+
+enum DisputeResolution {
+  REFUND_RENTER
+  PAY_OWNER
+  SPLIT
+}
+
+enum BookingStatus {
+  HELD
+  CONFIRMED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  roles        String   @default("RENTER") // Comma-separated list: "RENTER", "OWNER", "ADMIN_ARBITRATOR"
+  trustScore   Float    @default(50.0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items               Item[]
+  agreementsAsRenter  Agreement[]       @relation("RenterAgreements")
+  agreementsAsOwner   Agreement[]       @relation("OwnerAgreements")
+  reviewsSent         Review[]          @relation("ReviewsSent")
+  reviewsReceived     Review[]          @relation("ReviewsReceived")
+  disputesRaised      Dispute[]         @relation("DisputesRaised")
+  disputesArbitrated  Dispute[]         @relation("DisputesArbitrated")
+  contractTemplates   ContractTemplate[]
+}
+
+model Item {
+  id          String      @id @default(uuid())
+  ownerId     String
+  owner       User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  category    Category
+  title       String
+  description String
+  pricingUnit PricingUnit
+  basePrice   Float
+  attributes  Json        // Category-specific fields validated against Zod schema
+  location    String
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  agreements Agreement[]
+  bookings   Booking[]
+
+  @@index([category])
+  @@index([ownerId])
+  @@index([isActive])
+}
+
+model ContractTemplate {
+  id        String   @id @default(uuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  clauses   Json     // Array of clause objects: { type, params, description }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model Booking {
+  id          String        @id @default(uuid())
+  itemId      String
+  item        Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  agreementId String?       @unique
+  agreement   Agreement?    @relation(fields: [agreementId], references: [id], onDelete: SetNull)
+  startDate   DateTime
+  endDate     DateTime
+  status      BookingStatus @default(CONFIRMED)
+  createdAt   DateTime      @default(now())
+
+  @@index([itemId, startDate, endDate])
+}
+
+model Agreement {
+  id              String          @id @default(uuid())
+  itemId          String
+  item            Item            @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  renterId        String
+  renter          User            @relation("RenterAgreements", fields: [renterId], references: [id])
+  ownerId         String
+  owner           User            @relation("OwnerAgreements", fields: [ownerId], references: [id])
+  startDate       DateTime
+  endDate         DateTime
+  compiledClauses Json            // Frozen snapshot of contract clauses at acceptance time
+  status          AgreementStatus @default(DRAFT)
+  escrowState     EscrowState     @default(UNFUNDED)
+  escrowRef       String?
+  totalAmount     Float
+  auditLog        Json            // Array of audit log entries: { actorId, actorRole, action, timestamp, details }
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  booking Booking?
+  review  Review?
+  dispute Dispute?
+
+  @@index([itemId])
+  @@index([renterId])
+  @@index([ownerId])
+  @@index([status])
+}
+
+model Review {
+  id          String    @id @default(uuid())
+  agreementId String    @unique
+  agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  fromUserId  String
+  fromUser    User      @relation("ReviewsSent", fields: [fromUserId], references: [id])
+  toUserId    String
+  toUser      User      @relation("ReviewsReceived", fields: [toUserId], references: [id])
+  rating      Int
+  comment     String
+  createdAt   DateTime  @default(now())
+
+  @@index([toUserId])
+}
+
+model Dispute {
+  id              String             @id @default(uuid())
+  agreementId     String             @unique
+  agreement       Agreement          @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  raisedById      String
+  raisedBy        User               @relation("DisputesRaised", fields: [raisedById], references: [id])
+  reason          String
+  evidence        Json               // Array of text descriptions / evidence URLs
+  status          DisputeStatus      @default(OPEN)
+  resolution      DisputeResolution?
+  resolutionNotes String?
+  arbitratorId    String?
+  arbitrator      User?              @relation("DisputesArbitrated", fields: [arbitratorId], references: [id])
+  createdAt       DateTime           @default(now())
+  resolvedAt      DateTime?
+
+  @@index([status])
+  @@index([arbitratorId])
+}
